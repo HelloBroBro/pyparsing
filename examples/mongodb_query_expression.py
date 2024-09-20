@@ -40,6 +40,10 @@ def key_phrase(expr: Union[str, pp.ParserElement]) -> pp.ParserElement:
     return pp.Combine(expr, adjacent=False, join_string=" ")
 
 
+def unique(seq):
+    yield from dict.fromkeys(seq, None)
+
+
 LBRACK, RBRACK = pp.Suppress.using_each("[]")
 
 integer = ppc.integer()
@@ -189,18 +193,18 @@ def binary_array_comparison_op(s, l, tokens):
 
     if op == "contains none":
         return {
-            field: { "$nin": list({}.fromkeys(value, None) if isinstance(value, list) else {value})}
+            field: { "$nin": list(unique(value)) if isinstance(value, list) else {value}}
         }
 
     if op == "contains any":
         return {
-            field: { "$in": list({}.fromkeys(value, None) if isinstance(value, list) else {value})}
+            field: { "$in": list(unique(value)) if isinstance(value, list) else {value}}
         }
 
     if op == "contains":
         return {field: {binary_map[op]: value if isinstance(value, list) else [value]}}
 
-    return {field: {binary_map[op]: list({}.fromkeys(value, None) if isinstance(value, list) else {value})}}
+    return {field: {binary_map[op]: list(unique(value)) if isinstance(value, list) else {value}}}
 
 
 def regex_comparison_op(s, l, tokens):
@@ -441,8 +445,12 @@ def transform_query(query_string: str, include_comment: bool = False) -> Dict:
             {'dob': {'$lte': datetime.datetime(1964, 12, 31, 0, 0)}}
             ]
         }
+
         event.timestamp = 1969/07/20 10:56
+        {'event.timestamp': datetime.datetime(1969, 7, 20, 10, 56)}
+
         y2k = 2000/01/01 00:00:00.000
+        {'y2k': datetime.datetime(2000, 1, 1, 0, 0)}
 
     - `in` and `not in`
         name in ["Alice", "Bob"]
@@ -573,15 +581,19 @@ def main():
         # redundant equality conditions get collapsed
         a = 100 and a = 100
         # cannot define conflicting equality conditions
-        # a = 100 and a = 200
+        a = 100 and a = 200
         """
         r"name =~ 'Al\d+'"
     ).splitlines():
         print(test)
         if test.startswith("#"):
             continue
-        transformed = transform_query(test)
-        print(transformed)
+        try:
+            transformed = transform_query(test)
+        except Exception as exc:
+            print(pp.ParseException.explain_exception(exc))
+        else:
+            print(transformed)
         print()
 
 
